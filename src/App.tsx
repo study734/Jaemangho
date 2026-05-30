@@ -122,12 +122,12 @@ function App() {
     const riotKrUrl = (path: string, params: string) =>
       isDev
         ? `/riot-kr${path}?api_key=${apiKey}${params ? '&' + params : ''}`
-        : `${extProxy}https://kr.api.riotgames.com${path}?api_key=${apiKey}${params ? '&' + params : ''}`;
+        : `/api/riot?region=kr&path=${encodeURIComponent(path)}&api_key=${apiKey}${params ? '&' + params : ''}`;
 
     const riotAsiaUrl = (path: string, params: string) =>
       isDev
         ? `/riot-asia${path}?api_key=${apiKey}${params ? '&' + params : ''}`
-        : `${extProxy}https://asia.api.riotgames.com${path}?api_key=${apiKey}${params ? '&' + params : ''}`;
+        : `/api/riot?region=asia&path=${encodeURIComponent(path)}&api_key=${apiKey}${params ? '&' + params : ''}`;
 
     // Sleep helper to avoid burst rate limit issues (HTTP 429)
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -505,12 +505,12 @@ function App() {
     const srKrUrl = (path: string, params: string) =>
       isDev
         ? `/riot-kr${path}?api_key=${apiKey}${params ? '&' + params : ''}`
-        : `${extProxy}https://kr.api.riotgames.com${path}?api_key=${apiKey}${params ? '&' + params : ''}`;
+        : `/api/riot?region=kr&path=${encodeURIComponent(path)}&api_key=${apiKey}${params ? '&' + params : ''}`;
 
     const srAsiaUrl = (path: string, params: string) =>
       isDev
         ? `/riot-asia${path}?api_key=${apiKey}${params ? '&' + params : ''}`
-        : `${extProxy}https://asia.api.riotgames.com${path}?api_key=${apiKey}${params ? '&' + params : ''}`;
+        : `/api/riot?region=asia&path=${encodeURIComponent(path)}&api_key=${apiKey}${params ? '&' + params : ''}`;
 
     // Helper: axios GET with 404->null, other errors throw with Korean message
     const searchGet = async <T,>(url: string): Promise<T | null> => {
