@@ -49,14 +49,6 @@ function App() {
     return localStorage.getItem('jaemangho_api_key') || (import.meta.env.VITE_RIOT_API_KEY as string) || '';
   });
 
-  const [corsProxy, setCorsProxy] = useState<string>(() => {
-    const saved = localStorage.getItem('jaemangho_cors_proxy');
-    if (!saved || saved.includes('cors-anywhere.herokuapp.com')) {
-      return 'https://corsproxy.io/?';
-    }
-    return saved;
-  });
-
   const [isLoadingRealData, setIsLoadingRealData] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -72,10 +64,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem('jaemangho_api_key', apiKey);
   }, [apiKey]);
-
-  useEffect(() => {
-    localStorage.setItem('jaemangho_cors_proxy', corsProxy);
-  }, [corsProxy]);
 
   // DYNAMIC SIMULATION LOOP (Runs every 5 seconds when in Mock Mode)
   useEffect(() => {
@@ -786,8 +774,6 @@ function App() {
             setApiMode={setApiMode}
             apiKey={apiKey}
             setApiKey={setApiKey}
-            corsProxy={corsProxy}
-            setCorsProxy={setCorsProxy}
             onResetMembers={handleResetMembers}
           />
         )}

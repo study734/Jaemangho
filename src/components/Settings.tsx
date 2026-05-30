@@ -6,8 +6,6 @@ interface SettingsProps {
   setApiMode: (mode: 'mock' | 'real') => void;
   apiKey: string;
   setApiKey: (key: string) => void;
-  corsProxy: string;
-  setCorsProxy: (proxy: string) => void;
   onResetMembers: () => void;
 }
 
@@ -16,24 +14,15 @@ export const Settings: React.FC<SettingsProps> = ({
   setApiMode,
   apiKey,
   setApiKey,
-  corsProxy,
-  setCorsProxy,
   onResetMembers
 }) => {
   const [apiKeyInput, setApiKeyInput] = useState(apiKey);
-  const [proxyInput, setProxyInput] = useState(() => {
-    if (!corsProxy || corsProxy.includes('cors-anywhere.herokuapp.com')) {
-      return 'https://corsproxy.io/?';
-    }
-    return corsProxy;
-  });
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setApiKey(apiKeyInput.trim());
-    setCorsProxy(proxyInput.trim());
     alert('설정이 성공적으로 저장되었습니다!');
   };
 
@@ -63,13 +52,9 @@ export const Settings: React.FC<SettingsProps> = ({
     }
 
     const isDev = import.meta.env.DEV;
-    const proxy = proxyInput.includes('?')
-      ? proxyInput
-      : (proxyInput.endsWith('/') ? proxyInput : `${proxyInput}/`);
     const testUrl = isDev
       ? `/riot-asia/riot/account/v1/accounts/by-riot-id/%EC%98%A4%EC%B1%84/KR1?api_key=${trimmedKey}`
-      : `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/%EC%98%A4%EC%B1%84/KR1?api_key=${trimmedKey}`;
-
+      : `/api/riot?region=asia&path=${encodeURIComponent('/riot/account/v1/accounts/by-riot-id/오채/KR1')}&api_key=${trimmedKey}`;
 
     try {
       await axios.get(testUrl);
@@ -113,7 +98,7 @@ export const Settings: React.FC<SettingsProps> = ({
         <section className="card-feature" style={styles.settingsCard}>
           <h3 className="heading-3" style={{ color: '#00ed64', marginBottom: '14px' }}>엔진 작동 모드</h3>
           <p className="body-md" style={{ color: '#a8b3bc', marginBottom: '20px' }}>
-            GitHub Pages와 같은 정적 호스팅 환경에서 안전하고 최적화된 상태로 작동하기 위해 두 가지 작동 모드를 지원합니다.
+            애플리케이션의 데이터 구동 모드를 선택합니다. Vercel 서버리스 환경으로 이전 완료되어, 프론트와 서버가 완벽한 속도로 실시간 동기화됩니다.
           </p>
 
           <div className="settings-mode-grid">
@@ -137,7 +122,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
               <p className="body-sm" style={styles.modeDesc}>
                 로컬 가상 엔진이 실시간 게임 중 상태, 티어 변화, 매치 내역을 완벽하게 시뮬레이션합니다. 
-                API 키가 만료되지 않으며, 브라우저 CORS 문제 없이 깃허브 페이지에서 안전하게 100% 작동합니다.
+                API 키가 만료되지 않으며, 별도의 인증 없이 쾌적하게 100% 작동합니다.
               </p>
               <span className="badge-green-soft" style={{ marginTop: '8px' }}>API 키 불필요</span>
             </div>
@@ -162,7 +147,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
               <p className="body-sm" style={styles.modeDesc}>
                 라이엇 게임즈 공식 OpenAPI 서버로부터 실시간 전적 및 랭킹 데이터를 직접 당겨옵니다.
-                본인의 라이엇 개발자 API Key와 브라우저 CORS 보안 정책 우회를 위한 프록시 연동이 필요합니다.
+                본인의 라이엇 개발자 API Key가 필요하며, CORS 에러는 Vercel Serverless Function이 자체 처리합니다.
               </p>
               <span className="badge-popular" style={{ marginTop: '8px' }}>실시간 연동</span>
             </div>
@@ -188,23 +173,6 @@ export const Settings: React.FC<SettingsProps> = ({
               />
               <span style={styles.helpText}>
                 * 입력한 API Key는 본인 브라우저의 LocalStorage에 암호화 저장되며, 절대 외부 서버로 업로드되거나 유출되지 않습니다.
-              </span>
-            </div>
-
-            <div style={{ ...styles.formGroup, marginTop: '20px' }}>
-              <label style={styles.label}>
-                CORS 우회 Proxy 서버 URL
-                <span style={styles.labelSub}> (CORS 제한 방지용)</span>
-              </label>
-              <input 
-                type="text" 
-                className="text-input" 
-                placeholder="https://corsproxy.io/?"
-                value={proxyInput}
-                onChange={e => setProxyInput(e.target.value)}
-              />
-              <span style={styles.helpText}>
-                * 브라우저 보안 정책(CORS)으로 인해 Riot API 서버에 직접 요청할 수 없으므로, 우회를 지원할 프록시 게이트웨이 주소를 입력해야 합니다.
               </span>
             </div>
 
