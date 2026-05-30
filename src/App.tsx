@@ -83,8 +83,6 @@ function App() {
     } } = {};
 
     // URL builder: dev → Vite proxy (no CORS), prod → Vercel serverless proxy
-    const isDev = import.meta.env.DEV;
-
     const riotKrUrl = (path: string, params: string) =>
       isDev
         ? `/riot-kr${path}?api_key=${apiKey}${params ? '&' + params : ''}`
@@ -369,8 +367,6 @@ function App() {
     }
 
     // URL builder: dev → Vite proxy (no CORS), prod → Vercel serverless proxy
-    const isDev = import.meta.env.DEV;
-
     const srKrUrl = (path: string, params: string) =>
       isDev
         ? `/riot-kr${path}?api_key=${apiKey}${params ? '&' + params : ''}`
