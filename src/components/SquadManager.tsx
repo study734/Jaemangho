@@ -7,13 +7,17 @@ interface SquadManagerProps {
   onAddMember: (newMember: Omit<Member, 'id' | 'matches' | 'activeGame'>) => void;
   onRemoveMember: (id: string) => void;
   onUpdateMember: (member: Member) => void;
+  onSearchMember: (gameName: string, tagLine: string) => Promise<Omit<Member, 'id' | 'matches' | 'activeGame'>>;
+  apiMode: 'mock' | 'real';
 }
 
 export const SquadManager: React.FC<SquadManagerProps> = ({
   members,
   onAddMember,
   onRemoveMember,
-  onUpdateMember
+  onUpdateMember,
+  onSearchMember,
+  apiMode
 }) => {
   // Add Member form state
   const [gameName, setGameName] = useState('');
@@ -27,6 +31,11 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Search & Preview state
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchedProfile, setSearchedProfile] = useState<Omit<Member, 'id' | 'matches' | 'activeGame'> | null>(null);
+
   // Edit Member state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTier, setEditTier] = useState('GOLD');
@@ -36,9 +45,46 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
   const [editLosses, setEditLosses] = useState(50);
   const [editLevel, setEditLevel] = useState(150);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Handler to search summoner
+  const handleSearch = async (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!gameName || !tagLine) {
+    if (!gameName.trim() || !tagLine.trim()) {
+      alert('소환사 이름과 태그라인을 입력해 주세요.');
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+    setSearchedProfile(null);
+
+    try {
+      const profile = await onSearchMember(gameName.trim(), tagLine.trim());
+      setSearchedProfile(profile);
+    } catch (err) {
+      console.error(err);
+      setSearchError(err instanceof Error ? err.message : '검색 실패');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handler to confirm recruiting searched member
+  const handleConfirmAdd = () => {
+    if (searchedProfile) {
+      onAddMember(searchedProfile);
+
+      // Reset form
+      setGameName('');
+      setTagLine('');
+      setSearchedProfile(null);
+      setIsAdding(false);
+    }
+  };
+
+  // Handler to add manually via advanced settings
+  const handleSubmitManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gameName.trim() || !tagLine.trim()) {
       alert('소환사 이름과 태그라인을 입력해 주세요.');
       return;
     }
@@ -65,6 +111,7 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
     setWins(50);
     setLosses(50);
     setIsAdding(false);
+    setSearchedProfile(null);
   };
 
   const startEditing = (member: Member) => {
@@ -95,11 +142,21 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
       <header style={styles.header}>
         <div>
           <h2 className="heading-1" style={styles.title}>크루 멤버 관리</h2>
-          <p className="subtitle">대원들의 추가, 탈퇴 및 모의 스펙/티어를 직접 수정하여 커스텀 리그를 빌드해 보세요.</p>
+          <p className="subtitle">
+            {apiMode === 'real' 
+              ? '실시간 라이엇 서버에서 소환사를 검색하여 검증된 대원을 영입하고, 크루 대시보드를 구축해 보세요.' 
+              : '대원들의 추가, 탈퇴 및 모의 스펙/티어를 직접 수정하여 커스텀 리그를 빌드해 보세요.'}
+          </p>
         </div>
         <button 
           className="btn btn-primary"
-          onClick={() => setIsAdding(!isAdding)}
+          onClick={() => {
+            setIsAdding(!isAdding);
+            setSearchedProfile(null);
+            setSearchError(null);
+            setGameName('');
+            setTagLine('');
+          }}
         >
           {isAdding ? '닫기' : '새 대원 모집'}
         </button>
@@ -107,8 +164,10 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
 
       {/* Add Member Panel */}
       {isAdding && (
-        <form onSubmit={handleSubmit} className="card-feature" style={styles.addForm}>
-          <h3 className="heading-3" style={{ marginBottom: '20px', color: '#00ed64' }}>신규 대원 승선 계약</h3>
+        <div className="card-feature" style={styles.addForm}>
+          <h3 className="heading-3" style={{ marginBottom: '20px', color: '#00ed64' }}>
+            {apiMode === 'real' ? '라이엇 대원 신원 검증 및 영입' : '신규 대원 승선 계약'}
+          </h3>
           
           <div style={styles.formRow}>
             <div style={styles.formGroup}>
@@ -118,7 +177,11 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
                 className="text-input" 
                 placeholder="예: Faker"
                 value={gameName}
-                onChange={e => setGameName(e.target.value)}
+                onChange={e => {
+                  setGameName(e.target.value);
+                  setSearchedProfile(null);
+                  setSearchError(null);
+                }}
               />
             </div>
             <div style={styles.formGroup}>
@@ -128,15 +191,132 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
                 className="text-input" 
                 placeholder="예: KR1"
                 value={tagLine}
-                onChange={e => setTagLine(e.target.value)}
+                onChange={e => {
+                  setTagLine(e.target.value);
+                  setSearchedProfile(null);
+                  setSearchError(null);
+                }}
               />
             </div>
             <div style={{ ...styles.formGroup, display: 'flex', alignItems: 'flex-end' }}>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%', height: '44px' }}>
-                계약 체결 (대원 등록)
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                style={{ 
+                  width: '100%', 
+                  height: '44px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '8px', 
+                  borderColor: '#00ed64', 
+                  color: '#00ed64',
+                  backgroundColor: 'transparent'
+                }}
+                onClick={handleSearch}
+                disabled={isSearching}
+              >
+                {isSearching ? (
+                  <>
+                    <span className="pulse-indicator" style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#00ed64', marginRight: '4px' }} />
+                    조회 중...
+                  </>
+                ) : (
+                  <>🔍 소환사 검색 및 검증</>
+                )}
               </button>
             </div>
           </div>
+
+          {searchError && (
+            <div style={{ color: '#fa6e39', fontSize: '13px', fontWeight: 600, marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>⚠️</span> {searchError}
+            </div>
+          )}
+
+          {/* Searched Summoner Preview Card */}
+          {searchedProfile && (
+            <div className="card-feature" style={styles.previewCard}>
+              <h4 style={{ color: '#00ed64', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.8px' }}>
+                ✓ 신원 확인 완료 (영입 대기)
+              </h4>
+              
+              <div style={styles.previewContainer}>
+                <img 
+                  src={`https://ddragon.leagueoflegends.com/cdn/13.24.1/img/profileicon/${searchedProfile.profileIconId}.png`} 
+                  alt="icon" 
+                  style={styles.previewIcon} 
+                />
+                <div style={styles.previewMainInfo}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <h3 style={styles.previewName}>{searchedProfile.gameName}</h3>
+                    <span style={styles.previewTag}>#{searchedProfile.tagLine}</span>
+                  </div>
+                  <div style={styles.previewLevelBadge}>
+                    Lv.{searchedProfile.summonerLevel}
+                  </div>
+                </div>
+
+                <div style={styles.previewStats}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '80px' }}>
+                    <span style={styles.previewLabel}>티어</span>
+                    <span style={{ ...styles.previewValue, color: getTierColor(searchedProfile.tier) }}>
+                      {getTierLabelKR(searchedProfile.tier)} {searchedProfile.tier !== 'MASTER' && searchedProfile.tier !== 'GRANDMASTER' && searchedProfile.tier !== 'CHALLENGER' ? searchedProfile.rank : ''}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '60px' }}>
+                    <span style={styles.previewLabel}>LP</span>
+                    <span style={styles.previewValue}>{searchedProfile.leaguePoints} LP</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '100px' }}>
+                    <span style={styles.previewLabel}>전적</span>
+                    <span style={styles.previewValue}>
+                      {searchedProfile.wins}승 {searchedProfile.losses}패 ({Math.round((searchedProfile.wins / (searchedProfile.wins + searchedProfile.losses)) * 100) || 50}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {searchedProfile.championMasteries && searchedProfile.championMasteries.length > 0 && (
+                <div style={styles.previewMasteryRow}>
+                  <div style={styles.previewLabelMini}>주력 모스트 챔피언</div>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    {searchedProfile.championMasteries.map((m, idx) => (
+                      <div key={idx} style={styles.previewMasteryItem}>
+                        <img 
+                          src={`https://ddragon.leagueoflegends.com/cdn/13.24.1/img/champion/${m.championName}.png`}
+                          alt={m.championName}
+                          style={styles.previewMasteryIcon}
+                          onError={(e) => { (e.target as HTMLImageElement).src = "https://ddragon.leagueoflegends.com/cdn/13.24.1/img/champion/Ezreal.png"; }}
+                        />
+                        <div style={{ fontSize: '11.5px', color: '#ffffff', fontWeight: 600 }}>{m.championName}</div>
+                        <div style={{ fontSize: '10px', color: '#7c8c9a' }}>Lvl {m.championLevel}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={styles.previewActions}>
+                <button 
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '10px 20px', fontSize: '13px' }}
+                  onClick={() => setSearchedProfile(null)}
+                >
+                  다시 검색
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-primary" 
+                  style={{ flex: 2, padding: '10px 20px', fontWeight: 700, fontSize: '13px' }}
+                  onClick={handleConfirmAdd}
+                >
+                  🚢 이 대원 영입하기 (승선 계약 체결)
+                </button>
+              </div>
+            </div>
+          )}
 
           <div style={{ marginTop: '8px', marginBottom: '4px' }}>
             <button 
@@ -144,12 +324,12 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
               className="btn-link" 
               onClick={() => setShowAdvanced(!showAdvanced)}
             >
-              {showAdvanced ? '▴ 상세 정보 설정 숨기기' : '▾ 상세 정보 직접 입력 (티어, 레벨, 전적 커스텀)'}
+              {showAdvanced ? '▴ 상세 정보 설정 숨기기' : '▾ 상세 정보 직접 입력 (티어, 레벨, 전적 커스텀 등록)'}
             </button>
           </div>
 
           {showAdvanced && (
-            <>
+            <form onSubmit={handleSubmitManual}>
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>소환사 레벨</label>
@@ -168,7 +348,7 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
                     <option value="MASTER">마스터</option>
                     <option value="DIAMOND">다이아몬드</option>
                     <option value="EMERALD">에메랄드</option>
-                    <option value="PLATINUM">플래티넘</option>
+                    <option value="PLATINUM">플래이너</option>
                     <option value="GOLD">골드</option>
                     <option value="SILVER">실버</option>
                     <option value="BRONZE">브론즈</option>
@@ -215,9 +395,15 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
                   />
                 </div>
               </div>
-            </>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                <button type="submit" className="btn btn-primary" style={{ height: '44px', padding: '0 24px', fontSize: '13px' }}>
+                  🚢 커스텀 스펙으로 대원 즉시 등록
+                </button>
+              </div>
+            </form>
           )}
-        </form>
+        </div>
       )}
 
       {/* Members Cards Grid */}
@@ -406,6 +592,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '16px',
+    padding: '24px',
   },
   formRow: {
     display: 'grid',
@@ -562,5 +749,112 @@ const styles = {
     flex: 1,
     padding: '8px',
     fontSize: '12.5px',
+  },
+
+  // Preview Card Styles
+  previewCard: {
+    backgroundColor: '#001e2b',
+    border: '1.5px solid #00ed64',
+    padding: '24px',
+    borderRadius: '12px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '16px',
+    marginTop: '16px',
+  },
+  previewContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '20px',
+    flexWrap: 'wrap' as const,
+    backgroundColor: 'rgba(0, 30, 43, 0.6)',
+    padding: '16px',
+    borderRadius: '8px',
+    border: '1px solid #143747',
+  },
+  previewIcon: {
+    width: '56px',
+    height: '56px',
+    borderRadius: '12px',
+    border: '2px solid #00ed64',
+  },
+  previewMainInfo: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '6px',
+    flexGrow: 1,
+  },
+  previewName: {
+    fontSize: '18px',
+    fontWeight: 700,
+    color: '#ffffff',
+    margin: 0,
+  },
+  previewTag: {
+    fontSize: '13px',
+    color: '#7c8c9a',
+  },
+  previewLevelBadge: {
+    fontSize: '11.5px',
+    color: '#00ed64',
+    fontWeight: 600,
+    backgroundColor: 'rgba(0, 237, 100, 0.1)',
+    padding: '3px 8px',
+    borderRadius: '4px',
+    width: 'fit-content',
+  },
+  previewStats: {
+    display: 'flex',
+    gap: '24px',
+    flexWrap: 'wrap' as const,
+  },
+  previewLabel: {
+    fontSize: '10.5px',
+    color: '#7c8c9a',
+    textTransform: 'uppercase' as const,
+  },
+  previewValue: {
+    fontSize: '13.5px',
+    fontWeight: 700,
+    color: '#ffffff',
+    marginTop: '2px',
+  },
+  previewMasteryRow: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '4px',
+    borderTop: '1px solid rgba(28, 69, 88, 0.4)',
+    paddingTop: '14px',
+  },
+  previewLabelMini: {
+    fontSize: '11.5px',
+    fontWeight: 700,
+    color: '#7c8c9a',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.8px',
+  },
+  previewMasteryItem: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '4px',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    border: '1px solid #143747',
+    minWidth: '85px',
+  },
+  previewMasteryIcon: {
+    width: '30px',
+    height: '30px',
+    borderRadius: '6px',
+    border: '1px solid #1c4558',
+  },
+  previewActions: {
+    display: 'flex',
+    gap: '12px',
+    marginTop: '8px',
+    borderTop: '1px solid rgba(28, 69, 88, 0.4)',
+    paddingTop: '16px',
   }
 };

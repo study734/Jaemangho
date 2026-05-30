@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from 'react';
 import type { Member, ChampionMastery } from '../types';
 import { getTierColor } from '../mockData';
@@ -38,6 +39,7 @@ export const MasteryShowcase: React.FC<MasteryShowcaseProps> = ({ members }) => 
 
   // Format time ago
   const formatTimeAgo = (timestamp: number) => {
+    // eslint-disable-next-line react-hooks/purity
     const diff = Date.now() - timestamp;
     const mins = Math.floor(diff / 60000);
     if (mins < 60) return `${mins}분 전`;

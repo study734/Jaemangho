@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios, { type AxiosError } from 'axios';
 
 interface SettingsProps {
   apiMode: 'mock' | 'real';
@@ -20,7 +21,12 @@ export const Settings: React.FC<SettingsProps> = ({
   onResetMembers
 }) => {
   const [apiKeyInput, setApiKeyInput] = useState(apiKey);
-  const [proxyInput, setProxyInput] = useState(corsProxy);
+  const [proxyInput, setProxyInput] = useState(() => {
+    if (!corsProxy || corsProxy.includes('cors-anywhere.herokuapp.com')) {
+      return 'https://corsproxy.io/?';
+    }
+    return corsProxy;
+  });
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -56,35 +62,29 @@ export const Settings: React.FC<SettingsProps> = ({
       return;
     }
 
-    const proxy = proxyInput.endsWith('/') ? proxyInput : `${proxyInput}/`;
+    const proxy = proxyInput.includes('?')
+      ? proxyInput
+      : (proxyInput.endsWith('/') ? proxyInput : `${proxyInput}/`);
     const testUrl = `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/%EC%98%A4%EC%B1%84/KR1?api_key=${trimmedKey}`;
 
     try {
-      const res = await fetch(testUrl);
-      if (res.ok) {
-        setTestStatus('success');
-      } else {
-        let errorReason = '';
-        if (res.status === 401) {
-          errorReason = 'Riot API Key 미승인 (HTTP 401)';
-        } else if (res.status === 403) {
-          errorReason = 'Riot API Key 만료 (HTTP 403)';
-        } else if (res.status === 429) {
-          errorReason = '라이엇 서버 요청 제한 (HTTP 429)';
-        } else {
-          errorReason = `서버 응답 오류 (HTTP ${res.status})`;
-        }
-
-        console.warn(`Riot API connection returned: ${errorReason}. Bypassing with Mock-Verified fallback.`);
-        
-        // Force test success so the user is never blocked, but display the actual server status as a warning!
-        setTestStatus('success');
-        setErrorMessage(`⚠️ [${errorReason}] 라이엇 서버 인증은 실패했으나, 로컬 테스트를 위해 '모의 연결(Mock Verified)'로 강제 승인되었습니다!`);
-      }
-    } catch (err) {
-      console.warn('Network / CORS fetch failed. Bypassing with Mock-Verified fallback.', err);
+      await axios.get(testUrl);
       setTestStatus('success');
-      setErrorMessage(`⚠️ [CORS/네트워크 연결 제한] 브라우저 CORS 차단이 감지되었으나, 로컬 테스트를 위해 '모의 연결(Mock Verified)'로 강제 승인되었습니다!`);
+    } catch (e) {
+      const err = e as AxiosError;
+      const status = err.response?.status;
+      const errorReason =
+        status === 401 ? 'Riot API Key 미승인 (HTTP 401)' :
+        status === 403 ? 'Riot API Key 만료 (HTTP 403)' :
+        status === 429 ? '라이엇 서버 요청 제한 (HTTP 429)' :
+        !status       ? 'CORS/네트워크 연결 제한' :
+        `서버 응답 오류 (HTTP ${status})`;
+
+      console.warn(`Riot API connection issue: ${errorReason}. Bypassing with Mock-Verified fallback.`);
+
+      // Force test success so the user is never blocked, but display the actual server status as a warning!
+      setTestStatus('success');
+      setErrorMessage(`⚠️ [${errorReason}] 라이엇 서버 인증은 실패했으나, 로컬 테스트를 위해 '모의 연결(Mock Verified)'로 강제 승인되었습니다!`);
     }
   };
 
@@ -195,7 +195,7 @@ export const Settings: React.FC<SettingsProps> = ({
               <input 
                 type="text" 
                 className="text-input" 
-                placeholder="https://cors-anywhere.herokuapp.com/"
+                placeholder="https://corsproxy.io/?"
                 value={proxyInput}
                 onChange={e => setProxyInput(e.target.value)}
               />

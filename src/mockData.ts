@@ -53,7 +53,7 @@ const createMockMatchPlayer = (gameName: string, tagLine: string, champion: stri
 };
 
 // Helper to generate a complete Match History item
-const generateMockMatch = (
+export const generateMockMatch = (
   matchId: string,
   userGameName: string,
   userTagLine: string,
