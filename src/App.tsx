@@ -113,9 +113,21 @@ function App() {
       activeGame?: ActiveGame | null;
     } } = {};
 
-    const proxy = corsProxy.includes('?')
+    // URL builder: dev → Vite proxy (no CORS), prod → corsproxy.io
+    const isDev = import.meta.env.DEV;
+    const extProxy = corsProxy.includes('?')
       ? corsProxy
       : (corsProxy.endsWith('/') ? corsProxy : `${corsProxy}/`);
+
+    const riotKrUrl = (path: string, params: string) =>
+      isDev
+        ? `/riot-kr${path}?api_key=${apiKey}${params ? '&' + params : ''}`
+        : `${extProxy}https://kr.api.riotgames.com${path}?api_key=${apiKey}${params ? '&' + params : ''}`;
+
+    const riotAsiaUrl = (path: string, params: string) =>
+      isDev
+        ? `/riot-asia${path}?api_key=${apiKey}${params ? '&' + params : ''}`
+        : `${extProxy}https://asia.api.riotgames.com${path}?api_key=${apiKey}${params ? '&' + params : ''}`;
 
     // Sleep helper to avoid burst rate limit issues (HTTP 429)
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -147,7 +159,7 @@ function App() {
         };
 
         const buildAccountUrl = (name: string) =>
-          `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(member.tagLine)}?api_key=${apiKey}`;
+          riotAsiaUrl(`/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(member.tagLine)}`, '');
 
         // Try exact name, then fallbacks for Korean name spacing
         let accountData = await riotGet<{ puuid: string }>(buildAccountUrl(exactName));
@@ -171,7 +183,7 @@ function App() {
         const puuid = accountData.puuid;
 
         // 2. Get Summoner Details (Summoner-V4)
-        const summonerUrl = `${proxy}https://kr.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}?api_key=${apiKey}`;
+        const summonerUrl = riotKrUrl(`/lol/summoner/v4/summoners/by-puuid/${puuid}`, '');
         const summonerData = await (async () => {
           try {
             const res = await axios.get<{ id: string; summonerLevel: number; profileIconId: number }>(summonerUrl);
@@ -186,7 +198,7 @@ function App() {
         const iconId = summonerData.profileIconId;
 
         // 3. Get Ranked Entries (League-V4)
-        const leagueUrl = `${proxy}https://kr.api.riotgames.com/lol/league/v4/entries/by-summoner/${encryptedId}?api_key=${apiKey}`;
+        const leagueUrl = riotKrUrl(`/lol/league/v4/entries/by-summoner/${encryptedId}`, '');
         const leagueData = await (async () => {
           try {
             const res = await axios.get(leagueUrl);
@@ -212,7 +224,7 @@ function App() {
         interface RiotMastery { championId: number; championLevel: number; championPoints: number; lastPlayTime: number; }
         let topMasteries: ChampionMastery[] = [];
         try {
-          const masteryUrl = `${proxy}https://kr.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/top?count=3&api_key=${apiKey}`;
+          const masteryUrl = riotKrUrl(`/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/top`, 'count=3');
           const { data: masteryData } = await axios.get<RiotMastery[]>(masteryUrl);
           topMasteries = masteryData.map(m => ({
             championId: m.championId,
@@ -228,12 +240,12 @@ function App() {
         // 5. Get Real Recent 3 Matches (Match-V5)
         const realMatches: MatchHistory[] = [];
         try {
-          const matchIdsUrl = `${proxy}https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=3&api_key=${apiKey}`;
+          const matchIdsUrl = riotAsiaUrl(`/lol/match/v5/matches/by-puuid/${puuid}/ids`, 'start=0&count=3');
           const { data: matchIds } = await axios.get<string[]>(matchIdsUrl);
           for (const matchId of matchIds) {
             await sleep(80);
             try {
-              const matchDetailUrl = `${proxy}https://asia.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${apiKey}`;
+              const matchDetailUrl = riotAsiaUrl(`/lol/match/v5/matches/${matchId}`, '');
               const { data: matchData } = await axios.get<any>(matchDetailUrl);
               const info = matchData.info;
               if (info && info.participants) {
@@ -289,7 +301,7 @@ function App() {
         // 6. Get Real Active Game (Spectator-V5)
         let realActiveGame: ActiveGame | null = null;
         try {
-          const spectatorUrl = `${proxy}https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/${puuid}?api_key=${apiKey}`;
+          const spectatorUrl = riotKrUrl(`/lol/spectator/v5/active-games/by-puuid/${puuid}`, '');
           const { data: spectatorData } = await axios.get<any>(spectatorUrl);
           const playerPart = spectatorData.participants.find((p: any) => p.puuid === puuid);
           const playerTeamId = playerPart ? playerPart.teamId : 100;
@@ -484,9 +496,21 @@ function App() {
       throw new Error('Riot API Key를 설정 탭에서 입력해 주세요.');
     }
 
-    const proxy = corsProxy.includes('?')
+    // URL builder: dev → Vite proxy (no CORS), prod → corsproxy.io
+    const isDev = import.meta.env.DEV;
+    const extProxy = corsProxy.includes('?')
       ? corsProxy
       : (corsProxy.endsWith('/') ? corsProxy : `${corsProxy}/`);
+
+    const srKrUrl = (path: string, params: string) =>
+      isDev
+        ? `/riot-kr${path}?api_key=${apiKey}${params ? '&' + params : ''}`
+        : `${extProxy}https://kr.api.riotgames.com${path}?api_key=${apiKey}${params ? '&' + params : ''}`;
+
+    const srAsiaUrl = (path: string, params: string) =>
+      isDev
+        ? `/riot-asia${path}?api_key=${apiKey}${params ? '&' + params : ''}`
+        : `${extProxy}https://asia.api.riotgames.com${path}?api_key=${apiKey}${params ? '&' + params : ''}`;
 
     // Helper: axios GET with 404->null, other errors throw with Korean message
     const searchGet = async <T,>(url: string): Promise<T | null> => {
@@ -506,7 +530,7 @@ function App() {
 
     // 1. Resolve PUUID (Account-V1) with fallbacks
     const buildSearchUrl = (name: string) =>
-      `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(trimmedTag)}?api_key=${apiKey}`;
+      srAsiaUrl(`/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(trimmedTag)}`, '');
 
     let accountData = await searchGet<{ puuid: string; gameName: string; tagLine: string }>(buildSearchUrl(trimmedName));
 
@@ -532,7 +556,7 @@ function App() {
 
     // 2. Summoner details (Summoner-V4)
     const summonerData = await searchGet<{ id: string; summonerLevel: number; profileIconId: number }>(
-      `${proxy}https://kr.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}?api_key=${apiKey}`
+      srKrUrl(`/lol/summoner/v4/summoners/by-puuid/${puuid}`, '')
     );
     if (!summonerData) throw new Error('소환사 상세조회 실패 (HTTP 404)');
     const encryptedId = summonerData.id;
@@ -542,7 +566,7 @@ function App() {
     // 3. Ranked entries (League-V4)
     interface RiotLeagueEntry { queueType: string; tier: string; rank: string; leaguePoints: number; wins: number; losses: number; }
     const leagueData = await searchGet<RiotLeagueEntry[]>(
-      `${proxy}https://kr.api.riotgames.com/lol/league/v4/entries/by-summoner/${encryptedId}?api_key=${apiKey}`
+      srKrUrl(`/lol/league/v4/entries/by-summoner/${encryptedId}`, '')
     );
     const soloEntry = leagueData?.find(e => e.queueType === 'RANKED_SOLO_5x5') ?? leagueData?.[0];
 
@@ -551,7 +575,7 @@ function App() {
     let topMasteries: ChampionMastery[] = [];
     try {
       const masteryData = await searchGet<SearchRiotMastery[]>(
-        `${proxy}https://kr.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/top?count=3&api_key=${apiKey}`
+        srKrUrl(`/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/top`, 'count=3')
       );
       if (masteryData) {
         topMasteries = masteryData.map(m => ({

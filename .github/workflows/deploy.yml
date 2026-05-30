@@ -1,5 +1,7 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+# [DEPRECATED] GitHub Pages deploy workflow - replaced by Vercel auto-deploy
+# Vercel automatically deploys on every push to main. This file is kept for reference only.
+name: "[DEPRECATED] Deploy static content to Pages"
+
 
 on:
   # Allows you to run this workflow manually from the Actions tab (Automatic push deployment disabled)
@@ -32,7 +34,7 @@ jobs:
           node-version: 20
           cache: 'npm'
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       - name: Build
         run: npm run build
         env:

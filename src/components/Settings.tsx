@@ -62,10 +62,14 @@ export const Settings: React.FC<SettingsProps> = ({
       return;
     }
 
+    const isDev = import.meta.env.DEV;
     const proxy = proxyInput.includes('?')
       ? proxyInput
       : (proxyInput.endsWith('/') ? proxyInput : `${proxyInput}/`);
-    const testUrl = `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/%EC%98%A4%EC%B1%84/KR1?api_key=${trimmedKey}`;
+    const testUrl = isDev
+      ? `/riot-asia/riot/account/v1/accounts/by-riot-id/%EC%98%A4%EC%B1%84/KR1?api_key=${trimmedKey}`
+      : `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/%EC%98%A4%EC%B1%84/KR1?api_key=${trimmedKey}`;
+
 
     try {
       await axios.get(testUrl);
