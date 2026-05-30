@@ -113,11 +113,8 @@ function App() {
       activeGame?: ActiveGame | null;
     } } = {};
 
-    // URL builder: dev → Vite proxy (no CORS), prod → corsproxy.io
+    // URL builder: dev → Vite proxy (no CORS), prod → Vercel serverless proxy
     const isDev = import.meta.env.DEV;
-    const extProxy = corsProxy.includes('?')
-      ? corsProxy
-      : (corsProxy.endsWith('/') ? corsProxy : `${corsProxy}/`);
 
     const riotKrUrl = (path: string, params: string) =>
       isDev
@@ -496,11 +493,8 @@ function App() {
       throw new Error('Riot API Key를 설정 탭에서 입력해 주세요.');
     }
 
-    // URL builder: dev → Vite proxy (no CORS), prod → corsproxy.io
+    // URL builder: dev → Vite proxy (no CORS), prod → Vercel serverless proxy
     const isDev = import.meta.env.DEV;
-    const extProxy = corsProxy.includes('?')
-      ? corsProxy
-      : (corsProxy.endsWith('/') ? corsProxy : `${corsProxy}/`);
 
     const srKrUrl = (path: string, params: string) =>
       isDev
