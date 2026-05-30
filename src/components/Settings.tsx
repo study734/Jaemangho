@@ -40,15 +40,30 @@ export const Settings: React.FC<SettingsProps> = ({
     setTestStatus('testing');
     setErrorMessage('');
 
-    // Simulate key validation or make a real test fetch
-    setTimeout(() => {
-      if (apiKeyInput.startsWith('RGAPI-')) {
+    const proxy = proxyInput.endsWith('/') ? proxyInput : `${proxyInput}/`;
+    const testUrl = `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/%EC%98%A4%EC%B1%84/KR1?api_key=${apiKeyInput.trim()}`;
+
+    try {
+      const res = await fetch(testUrl);
+      if (res.ok) {
         setTestStatus('success');
       } else {
         setTestStatus('failed');
-        setErrorMessage('잘못된 API 키 형식입니다. 키는 "RGAPI-"로 시작해야 합니다.');
+        if (res.status === 401) {
+          setErrorMessage('Riot API Key가 올바르지 않습니다 (HTTP 401). 키 형식이나 스펠링을 다시 한 번 확인해 주세요.');
+        } else if (res.status === 403) {
+          setErrorMessage('Riot API Key가 만료되었습니다 (HTTP 403). 라이엇 개발자 사이트(https://developer.riotgames.com/)에서 다시 새 키를 발급받으세요.');
+        } else if (res.status === 429) {
+          setErrorMessage('요청 제한 횟수를 초과했습니다 (HTTP 429). 잠시만 기다린 뒤 다시 버튼을 눌러보세요.');
+        } else {
+          setErrorMessage(`연결 오류 (HTTP ${res.status}). CORS 프록시 동의를 완료했는지 확인하거나 다시 시도해 주세요.`);
+        }
       }
-    }, 1500);
+    } catch (err) {
+      console.error(err);
+      setErrorMessage('네트워크 연결 실패. 프록시 서버 상태를 확인하거나 https://cors-anywhere.herokuapp.com/corsdemo 에 접속해 임시 승인을 완료했는지 점검해 주세요.');
+      setTestStatus('failed');
+    }
   };
 
   const handleReset = () => {

@@ -82,14 +82,30 @@ function App() {
         // 1. Get PUUID from Riot ID (Account-V1)
         const accountUrl = `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(member.gameName)}/${encodeURIComponent(member.tagLine)}?api_key=${apiKey}`;
         const accountRes = await fetch(accountUrl);
-        if (!accountRes.ok) throw new Error(`Riot ID 조회 실패 (HTTP ${accountRes.status})`);
+        if (!accountRes.ok) {
+          if (accountRes.status === 401) {
+            throw new Error('라이엇 API 키가 올바르지 않습니다 (HTTP 401). 설정에서 키 형식을 확인해 주세요.');
+          } else if (accountRes.status === 403) {
+            throw new Error('라이엇 API 키가 만료되었습니다 (HTTP 403). 라이엇 개발자 사이트(https://developer.riotgames.com/)에서 새 키를 갱신해 주세요.');
+          } else if (accountRes.status === 404) {
+            throw new Error(`존재하지 않는 Riot ID입니다 (HTTP 404). 대원명(${member.gameName})과 태그(#${member.tagLine})에 오타가 없는지 확인해 주세요.`);
+          } else if (accountRes.status === 429) {
+            throw new Error('API 요청 제한을 초과했습니다 (HTTP 429). 잠시 후 다시 시도해 주세요.');
+          }
+          throw new Error(`Riot ID 조회 실패 (HTTP ${accountRes.status})`);
+        }
         const accountData = await accountRes.json();
         const puuid = accountData.puuid;
 
         // 2. Get Summoner Details (Summoner-V4)
         const summonerUrl = `${proxy}https://kr.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}?api_key=${apiKey}`;
         const summonerRes = await fetch(summonerUrl);
-        if (!summonerRes.ok) throw new Error(`소환사 상세조회 실패 (HTTP ${summonerRes.status})`);
+        if (!summonerRes.ok) {
+          if (summonerRes.status === 401 || summonerRes.status === 403) {
+            throw new Error(`인증 에러 (HTTP ${summonerRes.status}): API 키가 만료되었습니다.`);
+          }
+          throw new Error(`소환사 상세조회 실패 (HTTP ${summonerRes.status})`);
+        }
         const summonerData = await summonerRes.json();
         const encryptedId = summonerData.id;
         const level = summonerData.summonerLevel;
@@ -98,7 +114,9 @@ function App() {
         // 3. Get Ranked Entries (League-V4)
         const leagueUrl = `${proxy}https://kr.api.riotgames.com/lol/league/v4/entries/by-summoner/${encryptedId}?api_key=${apiKey}`;
         const leagueRes = await fetch(leagueUrl);
-        if (!leagueRes.ok) throw new Error(`랭크 정보 조회 실패 (HTTP ${leagueRes.status})`);
+        if (!leagueRes.ok) {
+          throw new Error(`랭크 정보 조회 실패 (HTTP ${leagueRes.status})`);
+        }
         const leagueData = await leagueRes.json();
 
         interface RiotLeagueEntry {
