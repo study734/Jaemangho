@@ -4,11 +4,12 @@ import { getTierColor, getTierLabelKR, getTierOrder, getRankOrder } from '../moc
 
 interface DashboardProps {
   members: Member[];
-  onSelectMember: (member: Member) => void;
+  fetchMemberDetails: (member: Member) => Promise<void>;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ members, onSelectMember: _onSelectMember }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ members, fetchMemberDetails }) => {
   const [selectedPlayer, setSelectedPlayer] = useState<Member | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [now] = useState(() => Date.now());
 
   // Filter active games
@@ -210,9 +211,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ members, onSelectMember: _
                   return (
                     <tr 
                       key={member.id} 
-                      onClick={() => {
+                      onClick={async () => {
                         setSelectedPlayer(member);
-                        _onSelectMember(member);
+                        setIsLoadingDetails(true);
+                        await fetchMemberDetails(member);
+                        setIsLoadingDetails(false);
                       }}
                       style={{ cursor: 'pointer' }}
                     >
@@ -298,9 +301,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ members, onSelectMember: _
             <div style={styles.modalBody}>
               <div style={styles.modalSectionTitle}>최근 경기 전적</div>
 
-              {selectedPlayer.matches.length === 0 ? (
+              {isLoadingDetails ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <span className="pulse-indicator" style={{ display: 'inline-block', width: '16px', height: '16px', marginBottom: '12px' }} />
+                  <p className="body-sm" style={{ color: '#7c8c9a' }}>상세 전적을 불러오는 중...</p>
+                </div>
+              ) : selectedPlayer.matches && selectedPlayer.matches.length === 0 ? (
                 <p className="body-sm" style={{ textAlign: 'center', padding: '24px' }}>매치 내역이 없습니다.</p>
-              ) : (
+              ) : selectedPlayer.matches && (
                 <div style={styles.matchesList}>
                   {selectedPlayer.matches.map(match => {
                     const kda = getKdaRatio(match.kills, match.deaths, match.assists);
