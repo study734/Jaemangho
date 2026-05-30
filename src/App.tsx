@@ -4,9 +4,30 @@ import { Dashboard } from './components/Dashboard';
 import { SquadManager } from './components/SquadManager';
 import { SynergyAnalyzer } from './components/SynergyAnalyzer';
 import { Settings } from './components/Settings';
-import type { Member } from './types';
+import { MasteryShowcase } from './components/MasteryShowcase';
+import type { Member, ChampionMastery } from './types';
 import { INITIAL_MEMBERS, tickSimulation, generateActiveGame } from './mockData';
 import './App.css';
+
+const CHAMPION_ID_MAP: { [key: number]: string } = {
+  1: 'Annie', 2: 'Olaf', 3: 'Galio', 4: 'TwistedFate', 5: 'XinZhao', 6: 'Urgot', 7: 'Leblanc', 8: 'Vladimir', 9: 'Fiddlesticks', 10: 'Kayle',
+  11: 'MasterYi', 12: 'Alistar', 13: 'Ryze', 14: 'Sion', 15: 'Sivir', 16: 'Soraka', 17: 'Teemo', 18: 'Tristana', 19: 'Warwick', 20: 'Nunu',
+  21: 'MissFortune', 22: 'Ashe', 23: 'Tryndamere', 24: 'Jax', 25: 'Morgana', 26: 'Zilean', 27: 'Singed', 28: 'Evelynn', 29: 'Twitch', 30: 'Karthus',
+  31: 'ChoGath', 32: 'Amumu', 33: 'Rammus', 34: 'Anivia', 35: 'Shaco', 36: 'DrMundo', 37: 'Sona', 38: 'Kassadin', 39: 'Irelia', 40: 'Janna',
+  41: 'Gangplank', 42: 'Corki', 43: 'Karma', 44: 'Taric', 45: 'Veigar', 48: 'Trundle', 50: 'Swain', 51: 'Caitlyn', 53: 'Blitzcrank', 54: 'Malphite',
+  55: 'Katarina', 56: 'Nocturne', 57: 'Maokai', 58: 'Renekton', 59: 'JarvanIV', 60: 'Elise', 61: 'Orianna', 62: 'Wukong', 63: 'Brand', 64: 'LeeSin',
+  67: 'Vayne', 68: 'Rumble', 69: 'Cassiopeia', 72: 'Skarner', 74: 'Heimerdinger', 75: 'Nasus', 76: 'Nidalee', 77: 'Udyr', 78: 'Poppy', 79: 'Gragas',
+  80: 'Pantheon', 81: 'Ezreal', 82: 'Mordekaiser', 83: 'Yorick', 84: 'Akali', 85: 'Kennen', 86: 'Garen', 89: 'Leona', 90: 'Malzahar', 91: 'Talon',
+  92: 'Riven', 96: 'KogMaw', 98: 'Shen', 99: 'Lux', 101: 'Xerath', 102: 'Shyvana', 103: 'Ahri', 104: 'Graves', 105: 'Fizz', 106: 'Volibear',
+  107: 'Rengar', 110: 'Varus', 111: 'Nautilus', 112: 'Viktor', 113: 'Sejuani', 114: 'Fiora', 115: 'Ziggs', 117: 'Lulu', 119: 'Draven', 120: 'Hecarim',
+  121: 'Khazix', 122: 'Darius', 126: 'Jayce', 127: 'Lissandra', 131: 'Diana', 133: 'Quinn', 134: 'Syndra', 136: 'AurelionSol', 141: 'Kayn', 142: 'Zoe',
+  143: 'Zyra', 145: 'Kaisa', 147: 'Seraphine', 150: 'Gnar', 154: 'Zac', 157: 'Yasuo', 161: 'VelKoz', 163: 'Taliyah', 164: 'Camille', 166: 'Akshan',
+  200: 'BelVeth', 201: 'Braum', 202: 'Jinx', 203: 'Kindred', 222: 'Jinx', 223: 'Lucian', 234: 'Viego', 235: 'Senna', 236: 'Lucian', 238: 'Zed',
+  240: 'Kled', 245: 'Ekko', 246: 'Qiyana', 254: 'Vi', 266: 'Aatrox', 267: 'Nami', 268: 'Azir', 350: 'Yuumi', 360: 'Samira', 412: 'Thresh',
+  420: 'Illaoi', 421: 'RekSai', 427: 'Ivern', 429: 'Kalista', 432: 'Bard', 497: 'Rakan', 498: 'Xayah', 516: 'Ornn', 517: 'Sylas', 518: 'Neeko',
+  523: 'Aphelios', 526: 'Rell', 555: 'Pyke', 777: 'Yone', 875: 'Sett', 876: 'Lillia', 887: 'Gwen', 888: 'Renata', 895: 'Nilah', 897: 'KsanTe',
+  902: 'Milio', 950: 'Naafiri', 910: 'Hwei', 901: 'Briar'
+};
 
 function App() {
   // Load State from LocalStorage or Fallback
@@ -73,7 +94,16 @@ function App() {
 
     // If a specific member is passed, we fetch just them, else we fetch for ALL members
     const membersToFetch = targetMember ? [targetMember] : members;
-    const fetchedStats: { [key: string]: { level: number; iconId: number; tier: string; rank: string; lp: number; wins: number; losses: number } } = {};
+    const fetchedStats: { [key: string]: { 
+      level: number; 
+      iconId: number; 
+      tier: string; 
+      rank: string; 
+      lp: number; 
+      wins: number; 
+      losses: number;
+      championMasteries?: ChampionMastery[];
+    } } = {};
 
     const proxy = corsProxy.endsWith('/') ? corsProxy : `${corsProxy}/`;
 
@@ -154,6 +184,32 @@ function App() {
         const leagueDataTyped = leagueData as RiotLeagueEntry[];
         const soloEntry = leagueDataTyped.find((entry) => entry.queueType === 'RANKED_SOLO_5x5') || leagueDataTyped[0];
 
+        // 4. Get Top 3 Champion Masteries (Champion-Mastery-V4)
+        let topMasteries: ChampionMastery[] = [];
+        try {
+          const masteryUrl = `${proxy}https://kr.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/top?count=3&api_key=${apiKey}`;
+          const masteryRes = await fetch(masteryUrl);
+          if (masteryRes.ok) {
+            const masteryData = await masteryRes.json();
+            interface RiotMastery {
+              championId: number;
+              championLevel: number;
+              championPoints: number;
+              lastPlayTime: number;
+            }
+            const typedMastery = masteryData as RiotMastery[];
+            topMasteries = typedMastery.map(m => ({
+              championId: m.championId,
+              championName: CHAMPION_ID_MAP[m.championId] || 'Ezreal',
+              championLevel: m.championLevel,
+              championPoints: m.championPoints,
+              lastPlayTime: m.lastPlayTime
+            }));
+          }
+        } catch (masteryErr) {
+          console.warn(`Failed to fetch masteries for ${member.gameName}, skipping`, masteryErr);
+        }
+
         fetchedStats[member.id] = {
           level,
           iconId,
@@ -162,6 +218,7 @@ function App() {
           lp: soloEntry ? soloEntry.leaguePoints : 0,
           wins: soloEntry ? soloEntry.wins : 0,
           losses: soloEntry ? soloEntry.losses : 0,
+          championMasteries: topMasteries.length > 0 ? topMasteries : undefined
         };
       } catch (err) {
         console.error(`Failed to fetch real data for ${member.gameName}:`, err);
@@ -183,6 +240,7 @@ function App() {
           leaguePoints: stats.lp,
           wins: stats.wins,
           losses: stats.losses,
+          championMasteries: stats.championMasteries || m.championMasteries
         };
       }
       return m;
@@ -342,6 +400,12 @@ function App() {
 
         {activeTab === 'synergy' && (
           <SynergyAnalyzer 
+            members={members} 
+          />
+        )}
+
+        {activeTab === 'mastery' && (
+          <MasteryShowcase 
             members={members} 
           />
         )}

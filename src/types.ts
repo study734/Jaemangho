@@ -61,6 +61,14 @@ export interface ActiveGame {
   }[];
 }
 
+export interface ChampionMastery {
+  championId: number;
+  championName: string;
+  championLevel: number;
+  championPoints: number;
+  lastPlayTime: number;
+}
+
 export interface Member {
   id: string; // Unique GUID or gameName#tagLine
   gameName: string;
@@ -74,6 +82,7 @@ export interface Member {
   losses: number;
   activeGame: ActiveGame | null;
   matches: MatchHistory[];
+  championMasteries?: ChampionMastery[];
 }
 
 export interface SynergyStats {

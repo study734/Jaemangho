@@ -271,7 +271,53 @@ const populateMockMatches = () => {
   ];
 };
 
+// Prepopulate champion masteries for each initial member
+const populateMockMasteries = () => {
+  // Captain (Lee Sin, Graves, Viego)
+  INITIAL_MEMBERS[0].championMasteries = [
+    { championId: 64, championName: 'LeeSin', championLevel: 7, championPoints: 852100, lastPlayTime: Date.now() - 2 * 60 * 60 * 1000 },
+    { championId: 104, championName: 'Graves', championLevel: 7, championPoints: 432000, lastPlayTime: Date.now() - 24 * 60 * 60 * 1000 },
+    { championId: 234, championName: 'Viego', championLevel: 6, championPoints: 185500, lastPlayTime: Date.now() - 48 * 60 * 60 * 1000 }
+  ];
+
+  // Golem Hunter (Garen, Aatrox, Darius)
+  INITIAL_MEMBERS[1].championMasteries = [
+    { championId: 86, championName: 'Garen', championLevel: 7, championPoints: 542000, lastPlayTime: Date.now() - 4 * 60 * 60 * 1000 },
+    { championId: 266, championName: 'Aatrox', championLevel: 6, championPoints: 298000, lastPlayTime: Date.now() - 18 * 60 * 60 * 1000 },
+    { championId: 122, championName: 'Darius', championLevel: 5, championPoints: 124000, lastPlayTime: Date.now() - 5 * 24 * 60 * 60 * 1000 }
+  ];
+
+  // Golem Slayer (Ezreal, Kaisa, Caitlyn)
+  INITIAL_MEMBERS[2].championMasteries = [
+    { championId: 81, championName: 'Ezreal', championLevel: 7, championPoints: 673000, lastPlayTime: Date.now() - 1 * 60 * 60 * 1000 },
+    { championId: 145, championName: 'Kaisa', championLevel: 6, championPoints: 320000, lastPlayTime: Date.now() - 36 * 60 * 60 * 1000 },
+    { championId: 51, championName: 'Caitlyn', championLevel: 5, championPoints: 112000, lastPlayTime: Date.now() - 6 * 24 * 60 * 60 * 1000 }
+  ];
+
+  // Supporter (Lulu, Thresh, Lux)
+  INITIAL_MEMBERS[3].championMasteries = [
+    { championId: 117, championName: 'Lulu', championLevel: 7, championPoints: 480000, lastPlayTime: Date.now() - 12 * 60 * 60 * 1000 },
+    { championId: 412, championName: 'Thresh', championLevel: 7, championPoints: 352000, lastPlayTime: Date.now() - 3 * 24 * 60 * 60 * 1000 },
+    { championId: 99, championName: 'Lux', championLevel: 4, championPoints: 95000, lastPlayTime: Date.now() - 8 * 24 * 60 * 60 * 1000 }
+  ];
+
+  // Noob (Yasuo, Yone, MasterYi)
+  INITIAL_MEMBERS[4].championMasteries = [
+    { championId: 157, championName: 'Yasuo', championLevel: 7, championPoints: 1240000, lastPlayTime: Date.now() - 10 * 60 * 60 * 1000 },
+    { championId: 777, championName: 'Yone', championLevel: 6, championPoints: 412000, lastPlayTime: Date.now() - 1 * 24 * 60 * 60 * 1000 },
+    { championId: 11, championName: 'MasterYi', championLevel: 3, championPoints: 54000, lastPlayTime: Date.now() - 14 * 24 * 60 * 60 * 1000 }
+  ];
+
+  // Crew (Ahri, Lux, Orianna)
+  INITIAL_MEMBERS[5].championMasteries = [
+    { championId: 103, championName: 'Ahri', championLevel: 6, championPoints: 310000, lastPlayTime: Date.now() - 8 * 60 * 60 * 1000 },
+    { championId: 99, championName: 'Lux', championLevel: 6, championPoints: 215000, lastPlayTime: Date.now() - 2 * 24 * 60 * 60 * 1000 },
+    { championId: 61, championName: 'Orianna', championLevel: 4, championPoints: 89000, lastPlayTime: Date.now() - 10 * 24 * 60 * 60 * 1000 }
+  ];
+};
+
 populateMockMatches();
+populateMockMasteries();
 
 // Generate an active game state for a player
 export const generateActiveGame = (gameName: string, tagLine: string): ActiveGame => {
