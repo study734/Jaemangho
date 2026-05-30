@@ -80,8 +80,32 @@ function App() {
     for (const member of membersToFetch) {
       try {
         // 1. Get PUUID from Riot ID (Account-V1)
-        const accountUrl = `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(member.gameName)}/${encodeURIComponent(member.tagLine)}?api_key=${apiKey}`;
-        const accountRes = await fetch(accountUrl);
+        const exactName = member.gameName;
+        let accountUrl = `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(exactName)}/${encodeURIComponent(member.tagLine)}?api_key=${apiKey}`;
+        let accountRes = await fetch(accountUrl);
+        
+        // Fallback 1: If exact match failed and the input contains spaces, try stripping spaces ("오 채" -> "오채")
+        if (!accountRes.ok && accountRes.status === 404 && exactName.includes(' ')) {
+          const strippedName = exactName.replace(/\s+/g, '');
+          const fallbackUrl = `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(strippedName)}/${encodeURIComponent(member.tagLine)}?api_key=${apiKey}`;
+          console.log(`[Riot API] Exact match failed. Trying stripped spaces fallback: ${strippedName}`);
+          const fallbackRes = await fetch(fallbackUrl);
+          if (fallbackRes.ok) {
+            accountRes = fallbackRes;
+          }
+        }
+        
+        // Fallback 2: If exact match failed and has no spaces, try inserting a space after the first character ("오채" -> "오 채")
+        if (!accountRes.ok && accountRes.status === 404 && !exactName.includes(' ') && exactName.length > 1) {
+          const spacedName = exactName.charAt(0) + ' ' + exactName.slice(1);
+          const fallbackUrl2 = `${proxy}https://asia.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(spacedName)}/${encodeURIComponent(member.tagLine)}?api_key=${apiKey}`;
+          console.log(`[Riot API] Exact match failed. Trying Korean spaced fallback: ${spacedName}`);
+          const fallbackRes2 = await fetch(fallbackUrl2);
+          if (fallbackRes2.ok) {
+            accountRes = fallbackRes2;
+          }
+        }
+
         if (!accountRes.ok) {
           if (accountRes.status === 401) {
             throw new Error('라이엇 API 키가 올바르지 않습니다 (HTTP 401). 설정에서 키 형식을 확인해 주세요.');
