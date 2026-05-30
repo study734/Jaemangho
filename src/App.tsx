@@ -361,100 +361,6 @@ function App() {
       throw new Error('소환사명과 태그라인을 둘 다 입력해 주세요.');
     }
 
-    if (apiMode === 'mock') {
-      const normalizedName = trimmedName.toLowerCase().replace(/\s+/g, '');
-      
-      // Presets for famous names
-      if (normalizedName.includes('faker')) {
-        return {
-          gameName: 'Faker',
-          tagLine: trimmedTag,
-          summonerLevel: 780,
-          profileIconId: 6,
-          tier: 'CHALLENGER',
-          rank: 'I',
-          leaguePoints: 1653,
-          wins: 588,
-          losses: 412,
-          championMasteries: [
-            { championId: 103, championName: 'Ahri', championLevel: 7, championPoints: 1420500, lastPlayTime: Date.now() - 3600000 },
-            { championId: 13, championName: 'Ryze', championLevel: 7, championPoints: 980400, lastPlayTime: Date.now() - 7200000 },
-            { championId: 238, championName: 'Zed', championLevel: 7, championPoints: 850200, lastPlayTime: Date.now() - 14400000 }
-          ]
-        };
-      }
-      
-      if (normalizedName.includes('showmaker')) {
-        return {
-          gameName: 'ShowMaker',
-          tagLine: trimmedTag,
-          summonerLevel: 620,
-          profileIconId: 12,
-          tier: 'CHALLENGER',
-          rank: 'I',
-          leaguePoints: 1342,
-          wins: 489,
-          losses: 391,
-          championMasteries: [
-            { championId: 134, championName: 'Syndra', championLevel: 7, championPoints: 840300, lastPlayTime: Date.now() - 3600000 },
-            { championId: 7, championName: 'Leblanc', championLevel: 7, championPoints: 720100, lastPlayTime: Date.now() - 10800000 },
-            { championId: 38, championName: 'Kassadin', championLevel: 6, championPoints: 410500, lastPlayTime: Date.now() - 86400000 }
-          ]
-        };
-      }
-      
-      // Dynamic random based on string hashing
-      let hash = 0;
-      for (let i = 0; i < trimmedName.length; i++) {
-        hash = trimmedName.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      const absHash = Math.abs(hash);
-      
-      const tiers = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER'];
-      const tierWeights = [0.03, 0.05, 0.12, 0.22, 0.22, 0.18, 0.12, 0.04, 0.01, 0.01]; 
-      let cumulative = 0;
-      const randValue = (absHash % 100) / 100;
-      let chosenTier = 'GOLD';
-      for (let i = 0; i < tiers.length; i++) {
-        cumulative += tierWeights[i];
-        if (randValue <= cumulative) {
-          chosenTier = tiers[i];
-          break;
-        }
-      }
-
-      const ranks = ['IV', 'III', 'II', 'I'];
-      const chosenRank = ranks[absHash % 4];
-      const level = (absHash % 450) + 30;
-      const iconId = absHash % 1000;
-      const lp = chosenTier === 'MASTER' || chosenTier === 'GRANDMASTER' || chosenTier === 'CHALLENGER' ? (absHash % 1200) : (absHash % 100);
-      const wins = (absHash % 200) + 20;
-      const losses = (absHash % 190) + 20;
-      
-      const mockChamps = ['Ezreal', 'Aatrox', 'LeeSin', 'Lulu', 'Yasuo', 'Lux'];
-      const shuffledChamps = [...mockChamps].sort((a, b) => {
-        const hashA = (a.charCodeAt(0) + absHash) % 10;
-        const hashB = (b.charCodeAt(0) + absHash) % 10;
-        return hashA - hashB;
-      });
-
-      return {
-        gameName: trimmedName,
-        tagLine: trimmedTag,
-        summonerLevel: level,
-        profileIconId: iconId,
-        tier: chosenTier,
-        rank: chosenRank,
-        leaguePoints: lp,
-        wins,
-        losses,
-        championMasteries: [
-          { championId: 81, championName: shuffledChamps[0], championLevel: 7, championPoints: 120000 + (absHash % 500000), lastPlayTime: Date.now() - 3600000 * (absHash % 48) },
-          { championId: 266, championName: shuffledChamps[1], championLevel: 6, championPoints: 45000 + (absHash % 200000), lastPlayTime: Date.now() - 3600000 * (absHash % 120) },
-          { championId: 64, championName: shuffledChamps[2], championLevel: 5, championPoints: 15000 + (absHash % 80000), lastPlayTime: Date.now() - 3600000 * (absHash % 300) }
-        ]
-      };
-    }
 
     // REAL RIOT API SEARCH ENGINE
     if (!apiKey) {
@@ -715,8 +621,6 @@ function App() {
 
         {activeTab === 'settings' && (
           <Settings 
-            apiMode={apiMode}
-            setApiMode={setApiMode}
             apiKey={apiKey}
             setApiKey={setApiKey}
             onResetMembers={handleResetMembers}
