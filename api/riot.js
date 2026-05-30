@@ -1,7 +1,6 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   // CORS 헤더 설정 (에러 방지)
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,10 +25,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const targetRegion = region === 'asia' ? 'asia' : 'kr';
   const targetUrl = `https://${targetRegion}.api.riotgames.com${path}`;
 
-  // API 키 결정:
-  // 1. 요청 쿼리에 포함된 api_key (사용자가 직접 브라우저 설정에 입력한 키)
-  // 2. Vercel 환경 변수 VITE_RIOT_API_KEY (서버 마스터 키)
-  const apiKey = (req.query.api_key as string) || process.env.VITE_RIOT_API_KEY;
+  // API 키 결정 (쿼리에 있으면 그것을 쓰고, 없으면 Vercel 환경변수 사용)
+  const apiKey = req.query.api_key || process.env.VITE_RIOT_API_KEY;
 
   if (!apiKey) {
     return res.status(401).json({ 
@@ -46,10 +43,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const response = await axios.get(targetUrl, {
       params: queryParams,
-      timeout: 10000, // 라이엇 서버 응답 지연을 대비해 10초 타임아웃
+      timeout: 10000,
     });
     return res.status(response.status).json(response.data);
-  } catch (error: any) {
+  } catch (error) {
     const status = error.response?.status || 500;
     const data = error.response?.data || { error: error.message };
     return res.status(status).json(data);
