@@ -96,234 +96,247 @@ function App() {
     // Sleep helper to avoid burst rate limit issues (HTTP 429)
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    for (const member of membersToFetch) {
-      try {
-        // Sequential delay between members (if multiple) to respect rate limits
-        if (membersToFetch.length > 1 && membersToFetch.indexOf(member) > 0) {
-          await sleep(150);
-        }
+    // Batching helper to split squad members into chunks of size 3 (concurrency limit = 3)
+    const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+      const chunks: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    };
 
-        // 1. Get PUUID from Riot ID (Account-V1)
-        const exactName = member.gameName;
+    const memberChunks = chunkArray(membersToFetch, 3);
 
-        // Helper: axios GET that returns null on 404, throws on other errors
-        const riotGet = async <T,>(url: string): Promise<T | null> => {
-          try {
-            const res = await axios.get<T>(url);
-            return res.data;
-          } catch (e) {
-            const err = e as AxiosError;
-            if (err.response?.status === 404) return null;
-            const status = err.response?.status;
-            if (status === 401) throw new Error('라이엇 API 키가 올바르지 않습니다 (HTTP 401). 설정에서 키 형식을 확인해 주세요.', { cause: e });
-            if (status === 403) throw new Error('라이엇 API 키가 만료되었습니다 (HTTP 403). 라이엇 개발자 사이트에서 새 키를 갱신해 주세요.', { cause: e });
-            if (status === 429) throw new Error('API 요청 제한을 초과했습니다 (HTTP 429). 잠시 후 다시 시도해 주세요.', { cause: e });
-            throw new Error(`Riot API 요청 실패 (HTTP ${status ?? 'network'})`, { cause: e });
-          }
-        };
-
-        const buildAccountUrl = (name: string) =>
-          riotAsiaUrl(`/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(member.tagLine)}`, '');
-
-        // Try exact name, then fallbacks for Korean name spacing
-        let accountData = await riotGet<{ puuid: string }>(buildAccountUrl(exactName));
-
-        if (!accountData && exactName.includes(' ')) {
-          const stripped = exactName.replace(/\s+/g, '');
-          console.log(`[Riot API] Trying stripped spaces fallback: ${stripped}`);
-          accountData = await riotGet<{ puuid: string }>(buildAccountUrl(stripped));
-        }
-
-        if (!accountData && !exactName.includes(' ') && exactName.length > 1) {
-          const spaced = exactName.charAt(0) + ' ' + exactName.slice(1);
-          console.log(`[Riot API] Trying Korean spaced fallback: ${spaced}`);
-          accountData = await riotGet<{ puuid: string }>(buildAccountUrl(spaced));
-        }
-
-        if (!accountData) {
-          throw new Error(`존재하지 않는 Riot ID입니다 (HTTP 404). 대원명(${member.gameName})과 태그(#${member.tagLine})에 오타가 없는지 확인해 주세요.`);
-        }
-
-        const puuid = accountData.puuid;
-
-        // 2. Get Summoner Details (Summoner-V4)
-        const summonerUrl = riotKrUrl(`/lol/summoner/v4/summoners/by-puuid/${puuid}`, '');
-        const summonerData = await (async () => {
-          try {
-            const res = await axios.get<{ id: string; summonerLevel: number; profileIconId: number }>(summonerUrl);
-            return res.data;
-          } catch (e) {
-            const err = e as AxiosError;
-            throw new Error(`소환사 상세조회 실패 (HTTP ${err.response?.status ?? 'network'})`, { cause: e });
-          }
-        })();
-        const encryptedId = summonerData.id;
-        const level = summonerData.summonerLevel;
-        const iconId = summonerData.profileIconId;
-
-        // 3. Get Ranked Entries (League-V4)
-        const leagueUrl = riotKrUrl(`/lol/league/v4/entries/by-summoner/${encryptedId}`, '');
-        const leagueData = await (async () => {
-          try {
-            const res = await axios.get(leagueUrl);
-            return res.data;
-          } catch (e) {
-            const err = e as AxiosError;
-            throw new Error(`랭크 정보 조회 실패 (HTTP ${err.response?.status ?? 'network'})`, { cause: e });
-          }
-        })();
-
-        interface RiotLeagueEntry {
-          queueType: string;
-          tier: string;
-          rank: string;
-          leaguePoints: number;
-          wins: number;
-          losses: number;
-        }
-        const leagueDataTyped = leagueData as RiotLeagueEntry[];
-        const soloEntry = leagueDataTyped.find((entry) => entry.queueType === 'RANKED_SOLO_5x5') || leagueDataTyped[0];
-
-        // 4. Get Top 3 Champion Masteries (Champion-Mastery-V4)
-        interface RiotMastery { championId: number; championLevel: number; championPoints: number; lastPlayTime: number; }
-        let topMasteries: ChampionMastery[] = [];
+    // Process each chunk sequentially, but parallelize members INSIDE the chunk
+    for (const chunk of memberChunks) {
+      await Promise.all(chunk.map(async (member) => {
         try {
-          const masteryUrl = riotKrUrl(`/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/top`, 'count=3');
-          const { data: masteryData } = await axios.get<RiotMastery[]>(masteryUrl);
-          topMasteries = masteryData.map(m => ({
-            championId: m.championId,
-            championName: CHAMPION_ID_MAP[m.championId] || 'Ezreal',
-            championLevel: m.championLevel,
-            championPoints: m.championPoints,
-            lastPlayTime: m.lastPlayTime
-          }));
-        } catch (masteryErr) {
-          console.warn(`Failed to fetch masteries for ${member.gameName}, skipping`, masteryErr);
-        }
+          // 1. Get PUUID from Riot ID (Account-V1)
+          const exactName = member.gameName;
 
-        // 5. Get Real Recent 3 Matches (Match-V5)
-        const realMatches: MatchHistory[] = [];
-        try {
-          const matchIdsUrl = riotAsiaUrl(`/lol/match/v5/matches/by-puuid/${puuid}/ids`, 'start=0&count=3');
-          const { data: matchIds } = await axios.get<string[]>(matchIdsUrl);
-          for (const matchId of matchIds) {
-            await sleep(80);
+          // Helper: axios GET that returns null on 404, throws on other errors
+          const riotGet = async <T,>(url: string): Promise<T | null> => {
             try {
-              const matchDetailUrl = riotAsiaUrl(`/lol/match/v5/matches/${matchId}`, '');
-              const { data: matchData } = await axios.get<any>(matchDetailUrl);
-              const info = matchData.info;
-              if (info && info.participants) {
-                const playerPart = info.participants.find((p: any) => p.puuid === puuid) || info.participants[0];
-
-                const allPlayersMapped: MatchPlayer[] = info.participants.map((p: any) => {
-                  let pName = p.riotIdGameName || p.summonerName || '소환사';
-                  let pTag = p.riotIdTagline || '';
-                  if (!pTag && p.summonerName && p.summonerName.includes('#')) {
-                    const parts = p.summonerName.split('#');
-                    pName = parts[0];
-                    pTag = parts[1] || '';
-                  }
-                  return {
-                    gameName: pName,
-                    tagLine: pTag,
-                    championName: p.championName || 'Unknown',
-                    championId: p.championId || 0,
-                    kills: p.kills || 0,
-                    deaths: p.deaths || 0,
-                    assists: p.assists || 0,
-                    win: !!p.win,
-                    totalMinionsKilled: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0),
-                    goldEarned: p.goldEarned || 0,
-                    itemIds: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6].filter((id: any) => id !== undefined && id !== null)
-                  };
-                });
-
-                realMatches.push({
-                  matchId,
-                  gameMode: info.gameMode || 'CLASSIC',
-                  gameDuration: info.gameDuration || 0,
-                  gameCreation: info.gameCreation || Date.now(),
-                  championName: playerPart.championName || 'Unknown',
-                  kills: playerPart.kills || 0,
-                  deaths: playerPart.deaths || 0,
-                  assists: playerPart.assists || 0,
-                  win: !!playerPart.win,
-                  cs: (playerPart.totalMinionsKilled || 0) + (playerPart.neutralMinionsKilled || 0),
-                  gold: playerPart.goldEarned || 0,
-                  items: [playerPart.item0, playerPart.item1, playerPart.item2, playerPart.item3, playerPart.item4, playerPart.item5, playerPart.item6].filter((id: any) => id !== undefined && id !== null),
-                  allPlayers: allPlayersMapped
-                });
-              }
-            } catch (matchDetailErr) {
-              console.warn(`Failed to fetch match detail ${matchId}`, matchDetailErr);
+              const res = await axios.get<T>(url);
+              return res.data;
+            } catch (e) {
+              const err = e as AxiosError;
+              if (err.response?.status === 404) return null;
+              const status = err.response?.status;
+              if (status === 401) throw new Error('라이엇 API 키가 올바르지 않습니다 (HTTP 401). 설정에서 키 형식을 확인해 주세요.', { cause: e });
+              if (status === 403) throw new Error('라이엇 API 키가 만료되었습니다 (HTTP 403). 라이엇 개발자 사이트에서 새 키를 갱신해 주세요.', { cause: e });
+              if (status === 429) throw new Error('API 요청 제한을 초과했습니다 (HTTP 429). 잠시 후 다시 시도해 주세요.', { cause: e });
+              throw new Error(`Riot API 요청 실패 (HTTP ${status ?? 'network'})`, { cause: e });
             }
-          }
-        } catch (matchErr) {
-          console.warn(`Failed to fetch match history for ${member.gameName}`, matchErr);
-        }
-
-        // 6. Get Real Active Game (Spectator-V5)
-        let realActiveGame: ActiveGame | null = null;
-        try {
-          const spectatorUrl = riotKrUrl(`/lol/spectator/v5/active-games/by-puuid/${puuid}`, '');
-          const { data: spectatorData } = await axios.get<any>(spectatorUrl);
-          const playerPart = spectatorData.participants.find((p: any) => p.puuid === puuid);
-          const playerTeamId = playerPart ? playerPart.teamId : 100;
-
-          const teamPlayers = spectatorData.participants.map((p: any) => {
-            let name = p.summonerName || 'Unknown';
-            let tag = '';
-            if (p.riotId) {
-              const parts = p.riotId.split('#');
-              name = parts[0];
-              tag = parts[1] || '';
-            } else if (p.summonerName && p.summonerName.includes('#')) {
-              const parts = p.summonerName.split('#');
-              name = parts[0];
-              tag = parts[1] || '';
-            }
-            return {
-              gameName: name,
-              tagLine: tag,
-              championName: CHAMPION_ID_MAP[p.championId] || 'Unknown',
-              isAlly: p.teamId === playerTeamId
-            };
-          });
-
-          const playerChampId = playerPart ? playerPart.championId : 0;
-          realActiveGame = {
-            gameId: spectatorData.gameId,
-            gameLength: spectatorData.gameLength,
-            gameStartTime: spectatorData.gameStartTime,
-            championName: CHAMPION_ID_MAP[playerChampId] || 'Unknown',
-            mapId: spectatorData.mapId,
-            gameMode: spectatorData.gameMode,
-            teamPlayers
           };
-        } catch (specErr) {
-          const specAxiosErr = specErr as AxiosError;
-          // 404 = not in game, suppress it silently
-          if (specAxiosErr.response?.status !== 404) {
-            console.warn(`Failed to fetch active game for ${member.gameName}`, specErr);
-          }
-        }
 
-        fetchedStats[member.id] = {
-          level,
-          iconId,
-          tier: soloEntry ? soloEntry.tier : 'UNRANKED',
-          rank: soloEntry ? soloEntry.rank : '',
-          lp: soloEntry ? soloEntry.leaguePoints : 0,
-          wins: soloEntry ? soloEntry.wins : 0,
-          losses: soloEntry ? soloEntry.losses : 0,
-          championMasteries: topMasteries.length > 0 ? topMasteries : undefined,
-          matches: realMatches.length > 0 ? realMatches : undefined,
-          activeGame: realActiveGame
-        };
-      } catch (err) {
-        console.error(`Failed to fetch real data for ${member.gameName}:`, err);
-        const errorMessage = err instanceof Error ? err.message : '네트워크 오류';
-        setApiError(`[${member.gameName}] API 연동 실패: ${errorMessage}. 라이엇 API 키 유효성(RGAPI)을 검사하거나, CORS 프록시 승인이 필요할 수 있습니다.`);
+          const buildAccountUrl = (name: string) =>
+            riotAsiaUrl(`/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(name)}/${encodeURIComponent(member.tagLine)}`, '');
+
+          // Try exact name, then fallbacks for Korean name spacing
+          let accountData = await riotGet<{ puuid: string }>(buildAccountUrl(exactName));
+
+          if (!accountData && exactName.includes(' ')) {
+            const stripped = exactName.replace(/\s+/g, '');
+            console.log(`[Riot API] Trying stripped spaces fallback: ${stripped}`);
+            accountData = await riotGet<{ puuid: string }>(buildAccountUrl(stripped));
+          }
+
+          if (!accountData && !exactName.includes(' ') && exactName.length > 1) {
+            const spaced = exactName.charAt(0) + ' ' + exactName.slice(1);
+            console.log(`[Riot API] Trying Korean spaced fallback: ${spaced}`);
+            accountData = await riotGet<{ puuid: string }>(buildAccountUrl(spaced));
+          }
+
+          if (!accountData) {
+            throw new Error(`존재하지 않는 Riot ID입니다 (HTTP 404). 대원명(${member.gameName})과 태그(#${member.tagLine})에 오타가 없는지 확인해 주세요.`);
+          }
+
+          const puuid = accountData.puuid;
+
+          // 2. Get Summoner Details (Summoner-V4)
+          const summonerUrl = riotKrUrl(`/lol/summoner/v4/summoners/by-puuid/${puuid}`, '');
+          const summonerData = await (async () => {
+            try {
+              const res = await axios.get<{ id: string; summonerLevel: number; profileIconId: number }>(summonerUrl);
+              return res.data;
+            } catch (e) {
+              const err = e as AxiosError;
+              throw new Error(`소환사 상세조회 실패 (HTTP ${err.response?.status ?? 'network'})`, { cause: e });
+            }
+          })();
+          const encryptedId = summonerData.id;
+          const level = summonerData.summonerLevel;
+          const iconId = summonerData.profileIconId;
+
+          // 3. Get Ranked Entries (League-V4)
+          const leagueUrl = riotKrUrl(`/lol/league/v4/entries/by-summoner/${encryptedId}`, '');
+          const leagueData = await (async () => {
+            try {
+              const res = await axios.get(leagueUrl);
+              return res.data;
+            } catch (e) {
+              const err = e as AxiosError;
+              throw new Error(`랭크 정보 조회 실패 (HTTP ${err.response?.status ?? 'network'})`, { cause: e });
+            }
+          })();
+
+          interface RiotLeagueEntry {
+            queueType: string;
+            tier: string;
+            rank: string;
+            leaguePoints: number;
+            wins: number;
+            losses: number;
+          }
+          const leagueDataTyped = leagueData as RiotLeagueEntry[];
+          const soloEntry = leagueDataTyped.find((entry) => entry.queueType === 'RANKED_SOLO_5x5') || leagueDataTyped[0];
+
+          // 4. Get Top 3 Champion Masteries (Champion-Mastery-V4)
+          interface RiotMastery { championId: number; championLevel: number; championPoints: number; lastPlayTime: number; }
+          let topMasteries: ChampionMastery[] = [];
+          try {
+            const masteryUrl = riotKrUrl(`/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/top`, 'count=3');
+            const { data: masteryData } = await axios.get<RiotMastery[]>(masteryUrl);
+            topMasteries = masteryData.map(m => ({
+              championId: m.championId,
+              championName: CHAMPION_ID_MAP[m.championId] || 'Ezreal',
+              championLevel: m.championLevel,
+              championPoints: m.championPoints,
+              lastPlayTime: m.lastPlayTime
+            }));
+          } catch (masteryErr) {
+            console.warn(`Failed to fetch masteries for ${member.gameName}, skipping`, masteryErr);
+          }
+
+          // 5. Get Real Recent 3 Matches (Match-V5)
+          const realMatches: MatchHistory[] = [];
+          try {
+            const matchIdsUrl = riotAsiaUrl(`/lol/match/v5/matches/by-puuid/${puuid}/ids`, 'start=0&count=3');
+            const { data: matchIds } = await axios.get<string[]>(matchIdsUrl);
+            for (const matchId of matchIds) {
+              await sleep(60); // Small sequential sleep inside for match details to stay friendly to development key
+              try {
+                const matchDetailUrl = riotAsiaUrl(`/lol/match/v5/matches/${matchId}`, '');
+                const { data: matchData } = await axios.get<any>(matchDetailUrl);
+                const info = matchData.info;
+                if (info && info.participants) {
+                  const playerPart = info.participants.find((p: any) => p.puuid === puuid) || info.participants[0];
+
+                  const allPlayersMapped: MatchPlayer[] = info.participants.map((p: any) => {
+                    let pName = p.riotIdGameName || p.summonerName || '소환사';
+                    let pTag = p.riotIdTagline || '';
+                    if (!pTag && p.summonerName && p.summonerName.includes('#')) {
+                      const parts = p.summonerName.split('#');
+                      pName = parts[0];
+                      pTag = parts[1] || '';
+                    }
+                    return {
+                      gameName: pName,
+                      tagLine: pTag,
+                      championName: p.championName || 'Unknown',
+                      championId: p.championId || 0,
+                      kills: p.kills || 0,
+                      deaths: p.deaths || 0,
+                      assists: p.assists || 0,
+                      win: !!p.win,
+                      totalMinionsKilled: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0),
+                      goldEarned: p.goldEarned || 0,
+                      itemIds: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6].filter((id: any) => id !== undefined && id !== null)
+                    };
+                  });
+
+                  realMatches.push({
+                    matchId,
+                    gameMode: info.gameMode || 'CLASSIC',
+                    gameDuration: info.gameDuration || 0,
+                    gameCreation: info.gameCreation || Date.now(),
+                    championName: playerPart.championName || 'Unknown',
+                    kills: playerPart.kills || 0,
+                    deaths: playerPart.deaths || 0,
+                    assists: playerPart.assists || 0,
+                    win: !!playerPart.win,
+                    cs: (playerPart.totalMinionsKilled || 0) + (playerPart.neutralMinionsKilled || 0),
+                    gold: playerPart.goldEarned || 0,
+                    items: [playerPart.item0, playerPart.item1, playerPart.item2, playerPart.item3, playerPart.item4, playerPart.item5, playerPart.item6].filter((id: any) => id !== undefined && id !== null),
+                    allPlayers: allPlayersMapped
+                  });
+                }
+              } catch (matchDetailErr) {
+                console.warn(`Failed to fetch match detail ${matchId}`, matchDetailErr);
+              }
+            }
+          } catch (matchErr) {
+            console.warn(`Failed to fetch match history for ${member.gameName}`, matchErr);
+          }
+
+          // 6. Get Real Active Game (Spectator-V5)
+          let realActiveGame: ActiveGame | null = null;
+          try {
+            const spectatorUrl = riotKrUrl(`/lol/spectator/v5/active-games/by-puuid/${puuid}`, '');
+            const { data: spectatorData } = await axios.get<any>(spectatorUrl);
+            const playerPart = spectatorData.participants.find((p: any) => p.puuid === puuid);
+            const playerTeamId = playerPart ? playerPart.teamId : 100;
+
+            const teamPlayers = spectatorData.participants.map((p: any) => {
+              let name = p.summonerName || 'Unknown';
+              let tag = '';
+              if (p.riotId) {
+                const parts = p.riotId.split('#');
+                name = parts[0];
+                tag = parts[1] || '';
+              } else if (p.summonerName && p.summonerName.includes('#')) {
+                const parts = p.summonerName.split('#');
+                name = parts[0];
+                tag = parts[1] || '';
+              }
+              return {
+                gameName: name,
+                tagLine: tag,
+                championName: CHAMPION_ID_MAP[p.championId] || 'Unknown',
+                isAlly: p.teamId === playerTeamId
+              };
+            });
+
+            const playerChampId = playerPart ? playerPart.championId : 0;
+            realActiveGame = {
+              gameId: spectatorData.gameId,
+              gameLength: spectatorData.gameLength,
+              gameStartTime: spectatorData.gameStartTime,
+              championName: CHAMPION_ID_MAP[playerChampId] || 'Unknown',
+              mapId: spectatorData.mapId,
+              gameMode: spectatorData.gameMode,
+              teamPlayers
+            };
+          } catch (specErr) {
+            const specAxiosErr = specErr as AxiosError;
+            if (specAxiosErr.response?.status !== 404) {
+              console.warn(`Failed to fetch active game for ${member.gameName}`, specErr);
+            }
+          }
+
+          fetchedStats[member.id] = {
+            level,
+            iconId,
+            tier: soloEntry ? soloEntry.tier : 'UNRANKED',
+            rank: soloEntry ? soloEntry.rank : '',
+            lp: soloEntry ? soloEntry.leaguePoints : 0,
+            wins: soloEntry ? soloEntry.wins : 0,
+            losses: soloEntry ? soloEntry.losses : 0,
+            championMasteries: topMasteries.length > 0 ? topMasteries : undefined,
+            matches: realMatches.length > 0 ? realMatches : undefined,
+            activeGame: realActiveGame
+          };
+        } catch (err) {
+          console.error(`Failed to fetch real data for ${member.gameName}:`, err);
+          const errorMessage = err instanceof Error ? err.message : '네트워크 오류';
+          setApiError(`[${member.gameName}] API 연동 실패: ${errorMessage}`);
+        }
+      }));
+
+      // Throttle safety buffer between chunks (150ms sleep) to stay safe under development API limit
+      if (memberChunks.indexOf(chunk) < memberChunks.length - 1) {
+        await sleep(150);
       }
     }
 
