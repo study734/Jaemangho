@@ -8,7 +8,6 @@ interface SquadManagerProps {
   onRemoveMember: (id: string) => void;
   onUpdateMember: (member: Member) => void;
   onSearchMember: (gameName: string, tagLine: string) => Promise<Omit<Member, 'id' | 'matches' | 'activeGame'>>;
-  apiMode: 'mock' | 'real';
 }
 
 export const SquadManager: React.FC<SquadManagerProps> = ({
@@ -16,8 +15,7 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
   onAddMember,
   onRemoveMember,
   onUpdateMember,
-  onSearchMember,
-  apiMode
+  onSearchMember
 }) => {
   // Add Member form state
   const [gameName, setGameName] = useState('');
@@ -143,9 +141,7 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
         <div>
           <h2 className="heading-1" style={styles.title}>크루 멤버 관리</h2>
           <p className="subtitle">
-            {apiMode === 'real' 
-              ? '실시간 라이엇 서버에서 소환사를 검색하여 검증된 대원을 영입하고, 크루 대시보드를 구축해 보세요.' 
-              : '대원들의 추가, 탈퇴 및 모의 스펙/티어를 직접 수정하여 커스텀 리그를 빌드해 보세요.'}
+            실시간 라이엇 서버에서 소환사를 검색하여 검증된 대원을 영입하고, 크루 대시보드를 구축해 보세요.
           </p>
         </div>
         <button 
@@ -166,7 +162,7 @@ export const SquadManager: React.FC<SquadManagerProps> = ({
       {isAdding && (
         <div className="card-feature" style={styles.addForm}>
           <h3 className="heading-3" style={{ marginBottom: '20px', color: '#00ed64' }}>
-            {apiMode === 'real' ? '라이엇 대원 신원 검증 및 영입' : '신규 대원 승선 계약'}
+            라이엇 대원 신원 검증 및 영입
           </h3>
           
           <div style={styles.formRow}>

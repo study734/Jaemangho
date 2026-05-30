@@ -8,7 +8,7 @@ import { SynergyAnalyzer } from './components/SynergyAnalyzer';
 import { Settings } from './components/Settings';
 import { MasteryShowcase } from './components/MasteryShowcase';
 import type { Member, ChampionMastery, MatchHistory, MatchPlayer, ActiveGame } from './types';
-import { INITIAL_MEMBERS, tickSimulation, generateActiveGame, generateMockMatch } from './mockData';
+import { INITIAL_MEMBERS } from './mockData';
 import './App.css';
 
 const CHAMPION_ID_MAP: { [key: number]: string } = {
@@ -32,18 +32,13 @@ const CHAMPION_ID_MAP: { [key: number]: string } = {
 };
 
 function App() {
-  // Load State from LocalStorage or Fallback
+  // Load State from LocalStorage or Fallback (INITIAL_MEMBERS is now empty [])
   const [members, setMembers] = useState<Member[]>(() => {
     const saved = localStorage.getItem('jaemangho_members');
     return saved ? JSON.parse(saved) : INITIAL_MEMBERS;
   });
 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-
-  const [apiMode, setApiMode] = useState<'mock' | 'real'>(() => {
-    const saved = localStorage.getItem('jaemangho_api_mode');
-    return (saved as 'mock' | 'real') || 'mock';
-  });
 
   const [apiKey, setApiKey] = useState<string>(() => {
     return localStorage.getItem('jaemangho_api_key') || (import.meta.env.VITE_RIOT_API_KEY as string) || '';
@@ -58,23 +53,8 @@ function App() {
   }, [members]);
 
   useEffect(() => {
-    localStorage.setItem('jaemangho_api_mode', apiMode);
-  }, [apiMode]);
-
-  useEffect(() => {
     localStorage.setItem('jaemangho_api_key', apiKey);
   }, [apiKey]);
-
-  // DYNAMIC SIMULATION LOOP (Runs every 5 seconds when in Mock Mode)
-  useEffect(() => {
-    if (apiMode !== 'mock') return;
-
-    const interval = setInterval(() => {
-      setMembers(prevMembers => tickSimulation(prevMembers));
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [apiMode]);
 
   // REAL RIOT API FETCHING ENGINE
   const fetchRealRiotData = async (targetMember?: Member) => {
@@ -587,13 +567,14 @@ function App() {
   };
 
   // Automatically fetch real Riot API data when toggling to Real Mode
+  // Automatically fetch real Riot API data when API Key is loaded/provided
   useEffect(() => {
-    if (apiMode === 'real' && apiKey) {
+    if (apiKey) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchRealRiotData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiMode, apiKey]);
+  }, [apiKey]);
 
   // Add Member Handler
   const handleAddMember = (newMemberData: Omit<Member, 'id' | 'matches' | 'activeGame'>) => {
@@ -610,60 +591,25 @@ function App() {
 
     const newId = Math.random().toString(36).substring(2, 9);
     
-    // Create base member
+    // Create base member (No mock matches, no mock masteries. Totally empty, pending real API fetch)
     const newMember: Member = {
       ...newMemberData,
       id: newId,
-      activeGame: Math.random() < 0.2 ? generateActiveGame(newMemberData.gameName, newMemberData.tagLine) : null,
+      summonerLevel: 0,
+      profileIconId: 29, // Default profile icon
+      tier: 'UNRANKED',
+      rank: '',
+      leaguePoints: 0,
+      wins: 0,
+      losses: 0,
+      activeGame: null,
       matches: []
     };
 
-    // Prepopulate champion masteries for Simulation Mode
-    const mockChamps = ['Ezreal', 'Aatrox', 'LeeSin', 'Lulu', 'Yasuo', 'Lux'];
-    const shuffledChamps = [...mockChamps].sort(() => 0.5 - Math.random());
-    newMember.championMasteries = [
-      {
-        championId: 81,
-        championName: shuffledChamps[0],
-        championLevel: 7,
-        championPoints: Math.floor(Math.random() * 300000) + 100000,
-        lastPlayTime: Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000
-      },
-      {
-        championId: 266,
-        championName: shuffledChamps[1],
-        championLevel: 6,
-        championPoints: Math.floor(Math.random() * 90000) + 30000,
-        lastPlayTime: Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000
-      },
-      {
-        championId: 64,
-        championName: shuffledChamps[2],
-        championLevel: 5,
-        championPoints: Math.floor(Math.random() * 40000) + 10000,
-        lastPlayTime: Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000
-      }
-    ];
-
-    // Prepopulate realistic matches matching their registered settings using generateMockMatch
-    const chosenChamp = shuffledChamps[0];
-    newMember.matches = Array.from({ length: 4 }, (_, idx) => {
-      const isWin = Math.random() > 0.45;
-      return generateMockMatch(
-        Math.random().toString(36).substring(2, 9),
-        newMemberData.gameName,
-        newMemberData.tagLine,
-        chosenChamp,
-        isWin,
-        'MID',
-        (idx + 1) * 3
-      );
-    });
-
     setMembers(prev => [newMember, ...prev]);
 
-    // If real API mode is active, trigger a background fetch to get their actual level/tier/matches
-    if (apiMode === 'real' && apiKey) {
+    // Trigger immediate real API background fetch to populate actual data
+    if (apiKey) {
       setTimeout(() => {
         fetchRealRiotData(newMember);
       }, 50);
@@ -723,7 +669,7 @@ function App() {
         )}
 
         {/* Sync Button for Real API Mode */}
-        {apiMode === 'real' && apiKey && !isLoadingRealData && (
+        {apiKey && !isLoadingRealData && (
           <div style={styles.syncRow}>
             <button 
               className="btn btn-secondary" 
@@ -752,7 +698,6 @@ function App() {
             onRemoveMember={handleRemoveMember}
             onUpdateMember={handleUpdateMember}
             onSearchMember={handleSearchMember}
-            apiMode={apiMode}
           />
         )}
 
